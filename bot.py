@@ -1,6 +1,7 @@
 # Netease Music Bot by Legendword (legendword.com)
-# Version 1.0
+# Version 1.1
 
+import random
 import json
 import urllib3
 
@@ -13,8 +14,6 @@ import discord
 from dotenv import load_dotenv
 
 from discord.ext import commands
-
-import youtube_dl
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -36,9 +35,12 @@ async def help(ctx):
 
 **Commands**
 - `nmb help` displays this message
-- `nmb play <url>` or `nmb p <url>` plays the song/playlist in the specified URL
-- `nmb skip` or `nmb next` skips the current song
+- `nmb play <url>` or `nmb p <url>` plays/queues the song/playlist in the specified URL
+- `nmb p <url> shuffle` plays/queues the playlist but shuffles it first
 - `nmb queue` or `nmb q` displays the queue
+- `nmb skip` or `nmb next` skips the current song
+- `nmb jumpto <index>` or `nmb to <index>` jumps to the given position in queue
+- `nmb shuffle` shuffles the entire queue
 - `nmb loop` toggles queue loop on/off
 - `nmb leave` or `nmb gun` makes me disconnect from the voice channel
 
@@ -50,16 +52,15 @@ A valid __Playlist URL__ looks like: `https://music.163.com/playlist?id=81079337
 Queue Loop is enabled by default, meaning that NMB will play from the top once it reaches the end of the queue.
 If Queue Loop is disabled, NMB will automatically leave the voice channel and clear the queue once it reaches the end.
 Songs labelled with ***[VIP]*** are Netease VIP-exclusive songs. Although most VIP songs allow free online listening, some can't be played online. Songs that can't be played will simply be skipped.
-Loading long playlists can take a while, so please be patient while waiting for NMB to respond when loading a long playlist.
+Loading long playlists/queues can take a while, so please be patient while waiting for NMB to respond.
 To save resources, only the first 10 songs will be displayed when showing a playlist with more than 10 songs, and only the next 20 songs will be displayed when showing a queue with more than 20 songs.
-If you encounter any bugs or would like to suggest a feature, view the [NMB GitHub page]() for more information.
+If you encounter any bugs or would like to suggest a feature, view the [NMB GitHub page](https://github.com/legendword/NeteaseMusicBot) for more information.
     '''
     await ctx.send(embed=discord.Embed(title='NMB Help', type='rich', description=help_text, color=discord.Color.red()))
 
 @bot.command(name='test')
 async def test(ctx):
-    channel = ctx.author.voice.channel
-    voice_channel = await channel.connect()
+    await ctx.message.add_reaction('\N{THUMBS UP SIGN}')
 
 @bot.command(name='leave', aliases=['disconnect','gun'])
 async def leave(ctx):
@@ -67,11 +68,33 @@ async def leave(ctx):
     await ctx.voice_client.disconnect()
     sq['is_playing'] = False
     sq['is_connected'] = False
+    await ctx.message.add_reaction('\N{THUMBS UP SIGN}')
+
+@bot.command(name='jumpto', aliases=['to'])
+async def jumpto(ctx, jpos:int):
+    sq = get_queue(ctx.guild.id, ctx.channel, ctx.voice_client)
+    if sq['is_connected']:
+        if jpos > len(sq['songs']) or jpos < 1:
+            await ctx.send(embed=discord.Embed(description='Queue only has '+str(len(sq['songs']))+' songs (index from 1 to '+str(len(sq['songs']))+') Jump index out of range!', type='rich', color=discord.Color.red()))
+        else:
+            await ctx.message.add_reaction('\N{THUMBS UP SIGN}')
+            sq['pos'] = jpos-2
+            sq['voice_client'].stop()
 
 @bot.command(name='skip', aliases=['next'])
 async def skip(ctx):
     sq = get_queue(ctx.guild.id, ctx.channel, ctx.voice_client)
-    sq['voice_client'].stop()
+    if sq['is_connected']:
+        sq['voice_client'].stop()
+        await ctx.message.add_reaction('\N{THUMBS UP SIGN}')
+
+@bot.command(name='shuffle')
+async def shuffle(ctx):
+    sq = get_queue(ctx.guild.id, ctx.channel, ctx.voice_client)
+    if sq['is_connected']:
+        random.shuffle(sq['songs'])
+        await jumpto.__call__(ctx, sq['pos']+1)
+
 
 @bot.command(name='loop')
 async def loop(ctx):
@@ -94,11 +117,12 @@ async def showqueue(ctx):
     else:
         title = 'Queue ('+str(sq['pos']+1)+'/'+str(len(sq['songs']))+')'
         if (len(sq['songs'])>20):
-            desc += '_Next in Queue:_'
-            for i in range(sq['pos'], min(sq['pos']+20, len(sq['songs']))):
-                if sq['songs'][i].get('name') == None:
-                    sq['songs'][i] = fetch_song_info(sq['songs'][i]['id'])
-                desc += '\n'+('>  ' if sq['pos']==i else '   ')+str(i+1)+'. **'+sq['songs'][i]['name']+'** - '+sq['songs'][i]['artists']+' ('+sq['songs'][i]['duration']+')'+(' ***[VIP]***' if sq['songs'][i]['vip']==True else '')
+            async with ctx.channel.typing():
+                desc += '_Next in Queue:_'
+                for i in range(sq['pos'], min(sq['pos']+20, len(sq['songs']))):
+                    if sq['songs'][i].get('name') == None:
+                        sq['songs'][i] = fetch_song_info(sq['songs'][i]['id'])
+                    desc += '\n'+('>  ' if sq['pos']==i else '   ')+str(i+1)+'. **'+sq['songs'][i]['name']+'** - '+sq['songs'][i]['artists']+' ('+sq['songs'][i]['duration']+')'+(' ***[VIP]***' if sq['songs'][i]['vip']==True else '')
         else:
             for i in range(len(sq['songs'])):
                 if sq['songs'][i].get('name') == None:
@@ -107,7 +131,7 @@ async def showqueue(ctx):
     await ctx.send(embed=discord.Embed(title=title, description=desc, type='rich', color=discord.Color.red()))
 
 @bot.command(name='play', aliases=['p'])
-async def play(ctx, url):
+async def play(ctx, url, should_shuffle=''):
     sq = get_queue(ctx.guild.id, ctx.channel, ctx.voice_client)
 
     sid = None
@@ -157,50 +181,54 @@ async def play(ctx, url):
     
     
     if sid != None:
-        if ctx.voice_client == None or sq['is_connected'] == False:
-            sq['voice_client'] = await ctx.author.voice.channel.connect()
-            sq['is_connected'] = True
-            sq['pos'] = 0
-        if smode == 'song':
-            song_info = fetch_song_info(sid)
-            sq['songs'].append(song_info)
-            if len(sq['songs']) == 1:
+        async with ctx.channel.typing():
+            if ctx.voice_client == None or sq['is_connected'] == False:
+                sq['voice_client'] = await ctx.author.voice.channel.connect()
+                sq['is_connected'] = True
                 sq['pos'] = 0
-                sq['is_playing'] = True
-                sq['voice_client'].play(discord.FFmpegPCMAudio(song_info['url']), after=lambda e:playback_finished(e,ctx.guild.id))
-                embd = discord.Embed(title=('Now Playing: '+song_info['name']+' - '+song_info['artists']), description=('Length: '+song_info['duration']), type='rich', color=discord.Color.red())
-                embd.set_thumbnail(url=song_info['album_cover'])
+            if smode == 'song':
+                song_info = fetch_song_info(sid)
+                sq['songs'].append(song_info)
+                if len(sq['songs']) == 1:
+                    sq['pos'] = 0
+                    sq['is_playing'] = True
+                    sq['voice_client'].play(discord.FFmpegPCMAudio(song_info['url']), after=lambda e:playback_finished(e,ctx.guild.id))
+                    embd = discord.Embed(title=('Now Playing: '+song_info['name']+' - '+song_info['artists']), description=('Length: '+song_info['duration']), type='rich', color=discord.Color.red())
+                    embd.set_thumbnail(url=song_info['album_cover'])
+                    await sq['text_channel'].send(embed=embd)
+                else:
+                    await ctx.send(embed=discord.Embed(title=('Queued: '+str(len(sq['songs']))+'. '+song_info['name']+' - '+song_info['artists']), description=('Currently Playing '+str(sq['pos']+1)+'/'+str(len(sq['songs']))), type='rich', color=discord.Color.red()))
+            elif smode == 'playlist':
+                playlist_info = fetch_playlist_info(sid)
+                title = playlist_info['name']
+                description = 'Playlist Description: _'+playlist_info['description']+'_\n'
+                if should_shuffle == 'shuffle':
+                    description += '**Playlist has been shuffled**\n'
+                    random.shuffle(playlist_info['list'])
+                ic = 1
+                for i in playlist_info['list']:
+                    if ic<=10:
+                        sinfo = fetch_song_info(i)
+                        sq['songs'].append(sinfo)
+                        description += '\n   '+str(ic)+'. **'+sinfo['name']+'** - '+sinfo['artists']+' ('+sinfo['duration']+')'
+                        if sinfo['vip'] == True:
+                            description += ' ***[VIP]***'
+                        ic += 1
+                    else:
+                        sq['songs'].append({'id':i})
+                if ic == 11:
+                    description += '\n   _...and '+str(len(playlist_info['list'])-10)+' more_'
+                embd = discord.Embed(title=title, description=description, type='rich', color=discord.Color.red())
+                embd.set_thumbnail(url=playlist_info['cover'])
+                embd.set_author(name=('Playlist by '+playlist_info['creator_name']))
                 await sq['text_channel'].send(embed=embd)
             else:
-                await ctx.send(embed=discord.Embed(title=('Queued: '+str(len(sq['songs']))+'. '+song_info['name']+' - '+song_info['artists']), description=('Currently Playing '+str(sq['pos']+1)+'/'+str(len(sq['songs']))), type='rich', color=discord.Color.red()))
-        elif smode == 'playlist':
-            playlist_info = fetch_playlist_info(sid)
-            title = playlist_info['name']
-            description = 'Playlist Description: _'+playlist_info['description']+'_\n'
-            ic = 1
-            for i in playlist_info['list']:
-                if ic<=10:
-                    sinfo = fetch_song_info(i)
-                    sq['songs'].append(sinfo)
-                    description += '\n   '+str(ic)+'. **'+sinfo['name']+'** - '+sinfo['artists']+' ('+sinfo['duration']+')'
-                    if sinfo['vip'] == True:
-                        description += ' ***[VIP]***'
-                    ic += 1
-                else:
-                    sq['songs'].append({'id':i})
-            if ic == 11:
-                description += '\n   _...and '+str(len(playlist_info['list'])-10)+' more_'
-            embd = discord.Embed(title=title, description=description, type='rich', color=discord.Color.red())
-            embd.set_thumbnail(url=playlist_info['cover'])
-            embd.set_author(name=('Playlist by '+playlist_info['creator_name']))
-            await sq['text_channel'].send(embed=embd)
-        else:
-            pass
-        if sq['is_playing'] == False and sq['pos'] == 0:
-            sq['is_playing'] = True
-            sq['voice_client'].play(discord.FFmpegPCMAudio(sq['songs'][0]['url']), after=lambda e:playback_finished(e,ctx.guild.id))
-            await sq['text_channel'].send(embed=discord.Embed(title=('Started Playing: '+sq['songs'][0]['name']+' - '+sq['songs'][0]['artists']), description=('Length: '+sq['songs'][0]['duration']+('\n***(Playback of VIP Songs is not guaranteed, skipping might occur)***') if sq['songs'][0]['vip']==True else ''), type='rich', color=discord.Color.red()).set_thumbnail(url=sq['songs'][0]['album_cover']))
-        ### IMPORTANT: backup music source url: 'https://music.163.com/song/media/outer/url?id='+sid+'.mp3'
+                pass
+            if sq['is_playing'] == False and sq['pos'] == 0:
+                sq['is_playing'] = True
+                sq['voice_client'].play(discord.FFmpegPCMAudio(sq['songs'][0]['url']), after=lambda e:playback_finished(e,ctx.guild.id))
+                await sq['text_channel'].send(embed=discord.Embed(title=('Started Playing: '+sq['songs'][0]['name']+' - '+sq['songs'][0]['artists']), description=('Length: '+sq['songs'][0]['duration']+('\n***(Playback of VIP Songs is not guaranteed, skipping might occur)***') if sq['songs'][0]['vip']==True else ''), type='rich', color=discord.Color.red()).set_thumbnail(url=sq['songs'][0]['album_cover']))
+    ### IMPORTANT: backup music source url: 'https://music.163.com/song/media/outer/url?id='+sid+'.mp3'
 
 
 def get_queue(gid, text, voice):
