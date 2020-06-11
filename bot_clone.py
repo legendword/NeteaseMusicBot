@@ -18,8 +18,7 @@ import discord
 from discord.ext import commands
 
 #load_dotenv()
-#TOKEN = os.getenv('DISCORD_CLONE_TOKEN')
-TOKEN = 'NzIwNDQyMjIyODA1Mzg1MjI3.XuGDnw.w7yt2H4CyvcgqXToIdIUX4QBb78'
+TOKEN = os.getenv('DISCORD_CLONE_TOKEN')
 
 bot = commands.Bot(command_prefix='nc ', case_insensitive=True)
 
