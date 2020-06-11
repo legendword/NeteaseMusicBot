@@ -1,5 +1,5 @@
 # Netease Music Bot by Legendword (legendword.com)
-# Version 1.3
+# Version 1.3 (Clone)
 
 import random
 import json
@@ -13,14 +13,15 @@ import os
 import re
 
 import discord
-from dotenv import load_dotenv
+#from dotenv import load_dotenv
 
 from discord.ext import commands
 
-load_dotenv()
-TOKEN = os.getenv('DISCORD_TOKEN')
+#load_dotenv()
+#TOKEN = os.getenv('DISCORD_CLONE_TOKEN')
+TOKEN = 'NzIwNDQyMjIyODA1Mzg1MjI3.XuGDnw.w7yt2H4CyvcgqXToIdIUX4QBb78'
 
-bot = commands.Bot(command_prefix='nmb ', case_insensitive=True)
+bot = commands.Bot(command_prefix='nc ', case_insensitive=True)
 
 bot.remove_command('help')
 
@@ -28,7 +29,7 @@ queue = {}
 
 @bot.event
 async def on_ready():
-    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name='nmb help'))
+    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name='nc help'))
     print(f'{bot.user.name} has connected to Discord!')
 
 @bot.command(name='help', aliases=['?'])
@@ -36,34 +37,34 @@ async def help(ctx):
     help_text = '''
 
 **Commands**
-- `nmb help` displays this message
-- `nmb play <url>` or `nmb p <url>` plays/queues the song/playlist in the specified URL
-- `nmb p <url> shuffle` plays/queues the playlist but shuffles it first
-- `nmb p <song name>` searches for the given song and plays the first result (`<song name>` can contain spaces!)
-- `nmb search <song name>` or `nmb s <song name>` searches for the given song and lists 5 results
-- `nmb cancel` cancel the song selection from `nmb search <song name>`
-- `nmb 1` to `nmb 5` selects one song from the search result and plays it
-- `nmb queue` or `nmb q` displays the queue
-- `nmb skip` or `nmb next` skips the current song
-- `nmb jumpto <index>` or `nmb to <index>` jumps to the given position in queue
-- `nmb delete <index>` or `nmb del <index>` removes the song at the given position in queue
-- `nmb del <start> <end>` removes all songs from `<start>` to `<end>` in queue
-- `nmb shuffle` shuffles the entire queue
-- `nmb loop` toggles queue loop on/off
-- `nmb leave` or `nmb gun` makes me disconnect from the voice channel
+- `nc help` displays this message
+- `nc play <url>` or `nc p <url>` plays/queues the song/playlist in the specified URL
+- `nc p <url> shuffle` plays/queues the playlist but shuffles it first
+- `nc p <song name>` searches for the given song and plays the first result (`<song name>` can contain spaces!)
+- `nc search <song name>` or `nc s <song name>` searches for the given song and lists 5 results
+- `nc cancel` cancel the song selection from `nc search <song name>`
+- `nc 1` to `nc 5` selects one song from the search result and plays it
+- `nc queue` or `nc q` displays the queue
+- `nc skip` or `nc next` skips the current song
+- `nc jumpto <index>` or `nc to <index>` jumps to the given position in queue
+- `nc delete <index>` or `nc del <index>` removes the song at the given position in queue
+- `nc del <start> <end>` removes all songs from `<start>` to `<end>` in queue
+- `nc shuffle` shuffles the entire queue
+- `nc loop` toggles queue loop on/off
+- `nc leave` or `nc gun` makes me disconnect from the voice channel
 
 **URL Examples**
 A valid __Song URL__ looks like: `https://music.163.com/song?id=476323553`
 A valid __Playlist URL__ looks like: `https://music.163.com/playlist?id=810793370`
 
 **Note**
-Queue Loop is enabled by default, meaning that NMB will play from the top once it reaches the end of the queue.
-If Queue Loop is disabled, NMB will automatically leave the voice channel and clear the queue once it reaches the end.
+Queue Loop is enabled by default, meaning that NMBC will play from the top once it reaches the end of the queue.
+If Queue Loop is disabled, NMBC will automatically leave the voice channel and clear the queue once it reaches the end.
 Songs labelled with ***[VIP]*** are Netease VIP-exclusive songs. Although most VIP songs allow free online listening, some can't be played online. Songs that can't be played will be skipped and removed from queue.
-Loading long playlists/queues can take a while, so please be patient while waiting for NMB to respond.
+Loading long playlists/queues can take a while, so please be patient while waiting for NMBC to respond.
 If you encounter any bugs or would like to suggest a feature, view the [NMB GitHub page](https://github.com/legendword/NeteaseMusicBot) for more information.
     '''
-    await ctx.send(embed=discord.Embed(title='NMB Help', type='rich', description=help_text, color=discord.Color.red()))
+    await ctx.send(embed=discord.Embed(title='NMBC Help', type='rich', description=help_text, color=discord.Color.red()))
 
 @bot.command(name='test')
 async def test(ctx):
@@ -157,7 +158,7 @@ async def showqueue(ctx):
     desc = ''
     if sq['is_connected'] == False:
         title = 'Queue (0/0)'
-        desc = 'Not Connected to Voice Channel.\nUse `nmb play <url>` to start playing.'
+        desc = 'Not Connected to Voice Channel.\nUse `nc play <url>` to start playing.'
     else:
         title = 'Queue ('+str(sq['pos']+1)+'/'+str(len(sq['songs']))+')'
         if (len(sq['songs'])>20):
@@ -226,7 +227,7 @@ async def search(ctx):
         for i in range(len(sres['songList'])):
             k = sres['songList'][i]
             desc += '\n   '+str(i+1)+'. **'+k['name']+'** - '+(' / '.join([ j['name'] for j in k['artists'] ]))+(' ***[VIP]***' if k['needPay']==True else '')
-        desc += '\n\nSelect one song to play via `nmb <id>`\nSearch again (perhaps include the artist in the search query as well) or `nmb cancel` if the desired song is not in this list.'
+        desc += '\n\nSelect one song to play via `nc <id>`\nSearch again (perhaps include the artist in the search query as well) or `nc cancel` if the desired song is not in this list.'
         await ctx.send(embed=discord.Embed(title=('Search Result for __'+td+'__'), description=desc, type='rich', color=discord.Color.red()))
 
 @bot.command(name='play', aliases=['p'])
@@ -247,11 +248,11 @@ async def play(ctx, url, should_shuffle=''):
             await ctx.send(embed=discord.Embed(description=('Searching for __'+td+'__ and playing the first result...'), type='rich', color=discord.Color.red()))
             sid = sres['songList'][0]['id']
     elif re.search('\?',url) == None:
-        await ctx.send(embed=discord.Embed(title='Error', description='URL format not supported, check `nmb help` for more information', type='rich', color=discord.Color.red()))
+        await ctx.send(embed=discord.Embed(title='Error', description='URL format not supported, check `nc help` for more information', type='rich', color=discord.Color.red()))
     else:
         if re.search('song\?',url) == None:
             if re.search('playlist\?',url) == None:
-                await ctx.send(embed=discord.Embed(title='Error', description='URL format not supported, check `nmb help` for more information', type='rich', color=discord.Color.red()))
+                await ctx.send(embed=discord.Embed(title='Error', description='URL format not supported, check `nc help` for more information', type='rich', color=discord.Color.red()))
             else:
                 #playlist
                 smode = 'playlist'
@@ -299,7 +300,7 @@ async def play(ctx, url, should_shuffle=''):
                 song_info = fetch_song_info(sid)
                 if (should_shuffle == 'next' or should_shuffle == 'insert') and sq['is_playing']:
                     sq['songs'].insert(sq['pos']+1, song_info)
-                    spos = sq['pos']+2
+                    spos = sq['pos']+1
                 else:
                     sq['songs'].append(song_info)
                     spos = len(sq['songs'])
@@ -394,7 +395,7 @@ def playback_finished(err,gid):
             sq['is_connected'] = False
             sq['is_playing'] = False
             sq['songs'] = []
-            coro = sq['text_channel'].send(embed=discord.Embed(title='Queue Finished', description='To Loop Queue, type `nmb loop`', type='rich', color=discord.Color.red()))
+            coro = sq['text_channel'].send(embed=discord.Embed(title='Queue Finished', description='To Loop Queue, type `nc loop`', type='rich', color=discord.Color.red()))
             fut = asyncio.run_coroutine_threadsafe(coro, bot.loop)
             try:
                 fut.result()
